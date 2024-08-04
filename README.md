@@ -589,3 +589,138 @@ export default {
   },
 };
 ```
+
+## 20.8 Serverless WebSockets
+
+### 이번에 할 것
+
+- Websocket 기본 연결
+
+### 인상적인 내용
+
+window.location.host
+
+어렵다!!!!
+
+### 코드
+
+- workers-chat/wrangler.toml
+
+```tsx
+#:schema node_modules/wrangler/config-schema.json
+name = "workers-visitors"
+main = "src/index.ts"
+compatibility_date = "2024-07-29"
+compatibility_flags = ["nodejs_compat"]
+
+kv_namespaces = [
+  { binding = "DB", id = "3d04e05e4b864148b2950aad45851473", preview_id = "a7573ca76396474c811223313b0ad5a6" }
+]
+
+[[migrations]]
+tag = "v1" # Should be unique for each entry
+new_classes = ["CounterObject"]
+
+[durable_objects]
+bindings = [
+    {name = "CHAT", class_name = "ChatRoom"}
+]
+```
+
+- workers-chat/src/home.html
+
+```html
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Visit Counter</title>
+  </head>
+  <body>
+    <h1>Visit Counter</h1>
+    <button>Connect</button>
+    <script>
+      const button = document.querySelector("button");
+      button.addEventListener("click", () => {
+        const socket = new WebSocket(`ws://${window.location.host}/connect`);
+
+        socket.addEventListener("open", () => {
+          console.log("connected");
+        });
+
+        socket.addEventListener("message", (event) => {
+          console.log(event.data);
+        });
+      });
+    </script>
+  </body>
+</html>
+```
+
+- workers-chat/src/index.ts
+
+```tsx
+export interface Env {
+  DB: KVNamespace;
+  CHAT: DurableObjectNamespace;
+}
+
+// @ts-ignore
+import home from "./home.html";
+
+export class ChatRoom {
+  state: DurableObjectState;
+  constructor(state: DurableObjectState, env: Env) {
+    this.state = state;
+  }
+  handleHome() {
+    return new Response(home, {
+      headers: {
+        "Content-Type": "text/html;chartset=utf-8",
+      },
+    });
+  }
+  handleNotFound() {
+    return new Response(null, {
+      status: 404,
+    });
+  }
+  handleConnect(request: Request) {
+    const pairs = new WebSocketPair();
+    this.handleWebSocket(pairs[1]);
+    return new Response(null, { status: 101, webSocket: pairs[0] });
+  }
+  handleWebSocket(webSocket: WebSocket) {
+    webSocket.accept();
+    webSocket.send(JSON.stringify({ message: "hello from backend!" }));
+  }
+  async fetch(request: Request) {
+    const { pathname } = new URL(request.url);
+    switch (pathname) {
+      case "/":
+        return this.handleHome();
+      case "/connect":
+        return this.handleConnect(request);
+      default:
+        return this.handleNotFound();
+    }
+  }
+}
+export default {
+  async fetch(
+    request: Request,
+    env: Env,
+    ctx: ExecutionContext
+  ): Promise<Response> {
+    const id = env.CHAT.idFromName("CHAT");
+    const durableObject = env.CHAT.get(id);
+    const response = await durableObject.fetch(request);
+    return response;
+  },
+};
+```
+
+### 팁
+
+https://developers.cloudflare.com/durable-objects/api/websockets/
+
+https://websockets.spec.whatwg.org/

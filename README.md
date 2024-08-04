@@ -460,3 +460,132 @@ export const makeBadge = (hits: number) => {
   return svg;
 };
 ```
+
+## 20.7 Our First Durable Object
+
+### 이번에 할 것
+
+- Durable Object 사용해보기
+
+### 인상적인 내용
+
+- durable object는 유저가 직접 호출할 수 없음!
+
+```tsx
+export default {
+  async fetch(
+    request: Request,
+    env: Env,
+    ctx: ExecutionContext
+  ): Promise<Response> {
+    const id = env.COUNTER.idFromName("counter");
+    const durableObject = env.COUNTER.get(id);
+    const response = await durableObject.fetch(request);
+    return response;
+  },
+};
+```
+
+고유한 id 생성한 후,
+
+```tsx
+const id = env.COUNTER.idFromName("counter");
+```
+
+Cloudflare Workers가 인스턴스를 생성하고,
+
+```tsx
+const durableObject = env.COUNTER.get(id);
+```
+
+인스턴스의 fetch 메소드 호출
+
+```tsx
+const response = await durableObject.fetch(request);
+```
+
+### 코드
+
+- workers-chat/wrangler.toml
+
+```tsx
+#:schema node_modules/wrangler/config-schema.json
+name = "workers-visitors"
+main = "src/index.ts"
+compatibility_date = "2024-07-29"
+compatibility_flags = ["nodejs_compat"]
+
+kv_namespaces = [
+  { binding = "DB", id = "3d04e05e4b864148b2950aad45851473", preview_id = "a7573ca76396474c811223313b0ad5a6" }
+]
+
+[[migrations]]
+tag = "v1" # Should be unique for each entry
+new_classes = ["CounterObject"]
+
+[durable_objects]
+bindings = [
+    {name = "COUNTER", class_name = "CounterObject"}
+]
+```
+
+- workers-chat/src/index.ts
+
+```tsx
+export interface Env {
+  DB: KVNamespace;
+  COUNTER: DurableObjectNamespace;
+}
+
+// @ts-ignore
+import home from "./home.html";
+
+function handleHome() {
+  return new Response(home, {
+    headers: {
+      "Content-Type": "text/html;chartset=utf-8",
+    },
+  });
+}
+
+function handleNotFound() {
+  return new Response(null, {
+    status: 404,
+  });
+}
+
+export class CounterObject {
+  counter: number;
+  constructor() {
+    this.counter = 0;
+  }
+  async fetch(request: Request) {
+    const { pathname } = new URL(request.url);
+    switch (pathname) {
+      case "/":
+        return new Response(this.counter);
+      case "/+":
+        this.counter++;
+        return new Response(this.counter);
+      case "/-":
+        this.counter--;
+        return new Response(this.counter);
+      default:
+        return handleNotFound();
+    }
+  }
+}
+
+export default {
+  async fetch(
+    request: Request,
+    env: Env,
+    ctx: ExecutionContext
+  ): Promise<Response> {
+    const id = env.COUNTER.idFromName("counter");
+    const durableObject = env.COUNTER.get(id);
+    const response = await durableObject.fetch(request);
+    return response;
+  },
+};
+```

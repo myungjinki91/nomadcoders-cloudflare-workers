@@ -214,3 +214,99 @@ VSC 'better toml' install
 npm run start 사용시 KV-Cloudflare preview 데이터 저장 안됨
 
 wrangler dev --remote 로 시작해야 KV-Cloudflare preview 에 데이터 저장이 됨
+
+## 20.4 Visit Counter
+
+### 이번에 할 것
+
+- Visit Counter 만들기
+
+### 인상적인 내용
+
+- TypeScript: URLSearchParams
+- JSON도 저장가능!
+- eventually consistent: DB는 Cloudflare network에 존재해서 너무 빨리 업데이트하면 반영이 바로 안될 수도 있습니다. 그리고 결국 마지막 데이터가 저장됩니다.
+- KV는 미쳤습니다.
+
+### 코드
+
+```tsx
+/**
+ * Welcome to Cloudflare Workers! This is your first worker.
+ *
+ * - Run `npm run dev` in your terminal to start a development server
+ * - Open a browser tab at http://localhost:8787/ to see your worker in action
+ * - Run `npm run deploy` to publish your worker
+ *
+ * Bind resources to your worker in `wrangler.toml`. After adding bindings, a type definition for the
+ * `Env` object can be regenerated with `npm run cf-typegen`.
+ *
+ * Learn more at https://developers.cloudflare.com/workers/
+ */
+
+export interface Env {
+  // Example binding to KV. Learn more at https://developers.cloudflare.com/workers/runtime-apis/kv/
+  DB: KVNamespace;
+}
+
+// @ts-ignore
+import home from "./home.html";
+
+function handleHome() {
+  return new Response(home, {
+    headers: {
+      "Content-Type": "text/html;chartset=utf-8",
+    },
+  });
+}
+
+function handleNotFound() {
+  return new Response(null, {
+    status: 404,
+  });
+}
+
+function handleBadRequest() {
+  return new Response(null, {
+    status: 400,
+  });
+}
+
+async function handleVisit(searchParams: URLSearchParams, env: Env) {
+  const page = searchParams.get("page");
+  if (!page) {
+    return handleBadRequest();
+  }
+  const kvPage = await env.DB.get(page);
+  let value = 1;
+  if (!kvPage) {
+    await env.DB.put(page, value + "");
+  } else {
+    value = parseInt(kvPage) + 1;
+    await env.DB.put(page, value + "");
+  }
+  return new Response(JSON.stringify({ visits: value }), {
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
+}
+
+export default {
+  async fetch(
+    request: Request,
+    env: Env,
+    ctx: ExecutionContext
+  ): Promise<Response> {
+    const { pathname, searchParams } = new URL(request.url);
+    switch (pathname) {
+      case "/":
+        return handleHome();
+      case "/visit":
+        return handleVisit(searchParams, env);
+      default:
+        return handleNotFound();
+    }
+  },
+};
+```

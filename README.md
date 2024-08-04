@@ -310,3 +310,153 @@ export default {
   },
 };
 ```
+
+## 20.5 Conclusions
+
+### 이번에 할 것
+
+- Visitor를 JSON에서 SVG로 꾸미기
+
+### 인상적인 내용
+
+- 이미지 요청 → 데이터 처리 → Visitor결과를 svg로 만들고 응답
+- 이메일을 읽었는지 확인하는 것도 이렇게 확인한다.
+
+### 코드
+
+- workers-visitors/src/home.html
+
+```html
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Visit Counter</title>
+  </head>
+  <body>
+    <h1>Visit Counter</h1>
+    <h3>How to use?</h3>
+    <ul>
+      <li>
+        All you have to do is call (GET) this URL:
+        <code
+          >https://workers-visitors.myungjinki91.workers.dev/visit?page=$URL
+        </code>
+      </li>
+      <li>Replace $URL for your website URL.</li>
+    </ul>
+    <h4>Live Demo:</h4>
+    <img src="/visit?page=https://workers-visitors.myungjinki91.workers.dev/" />
+  </body>
+</html>
+```
+
+- workers-visitors/src/index.ts
+
+```tsx
+/**
+ * Welcome to Cloudflare Workers! This is your first worker.
+ *
+ * - Run `npm run dev` in your terminal to start a development server
+ * - Open a browser tab at http://localhost:8787/ to see your worker in action
+ * - Run `npm run deploy` to publish your worker
+ *
+ * Bind resources to your worker in `wrangler.toml`. After adding bindings, a type definition for the
+ * `Env` object can be regenerated with `npm run cf-typegen`.
+ *
+ * Learn more at https://developers.cloudflare.com/workers/
+ */
+
+export interface Env {
+  // Example binding to KV. Learn more at https://developers.cloudflare.com/workers/runtime-apis/kv/
+  DB: KVNamespace;
+}
+
+// @ts-ignore
+import home from "./home.html";
+import { makeBadge } from "./utils";
+
+function handleHome() {
+  return new Response(home, {
+    headers: {
+      "Content-Type": "text/html;chartset=utf-8",
+    },
+  });
+}
+
+function handleNotFound() {
+  return new Response(null, {
+    status: 404,
+  });
+}
+
+function handleBadRequest() {
+  return new Response(null, {
+    status: 400,
+  });
+}
+
+async function handleVisit(searchParams: URLSearchParams, env: Env) {
+  const page = searchParams.get("page");
+  if (!page) {
+    return handleBadRequest();
+  }
+  const kvPage = await env.DB.get(page);
+  let value = 1;
+  if (!kvPage) {
+    await env.DB.put(page, value + "");
+  } else {
+    value = parseInt(kvPage) + 1;
+    await env.DB.put(page, value + "");
+  }
+  return new Response(makeBadge(value), {
+    headers: {
+      "Content-Type": "image/svg+xml;charset=utf-8",
+    },
+  });
+}
+
+export default {
+  async fetch(
+    request: Request,
+    env: Env,
+    ctx: ExecutionContext
+  ): Promise<Response> {
+    const { pathname, searchParams } = new URL(request.url);
+    switch (pathname) {
+      case "/":
+        return handleHome();
+      case "/visit":
+        return handleVisit(searchParams, env);
+      default:
+        return handleNotFound();
+    }
+  },
+};
+```
+
+- workers-visitors/src/utils.ts
+
+```tsx
+export const makeBadge = (hits: number) => {
+  const formatted = new Intl.NumberFormat("kr-KO").format(hits);
+  const width = `Views:  ${formatted}`.length * 6.5;
+  const svg = `
+      <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${
+        width + 10
+      }" height="20" role="img" aria-label="Views ${formatted}">
+        <title>Views: ${formatted}</title>
+        <g shape-rendering="crispEdges">
+        <rect x="0" width="${width + 3}" height="20" fill="#000"/>
+        </g>
+        <g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" text-rendering="geometricPrecision" font-size="110">
+          <text x="${
+            width * 5
+          }" y="140" transform="scale(.1)" fill="#fff" textLength="${
+    width * 9
+  }">Views:  ${formatted}</text>
+        </g>
+      </svg>
+      `;
+  return svg;
+};
+```

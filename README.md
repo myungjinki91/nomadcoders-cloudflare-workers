@@ -124,3 +124,93 @@ using create-cloudflare version 2.23.0
 ```bash
 npm run deploy
 ```
+
+## 20.3 Workers KV
+
+### 이번에 할 것
+
+- KV생성
+- KV와 Worker 연결
+
+### 인상적인 내용
+
+- Workers KV
+- KV database
+- Serverless DB
+
+### 코드
+
+```tsx
+wrangler kv:namespace create "view_counter"
+
+▲ [WARNING] The `wrangler kv:namespace` command is deprecated and will be removed in a future major version. Please use `wrangler kv namespace` instead which behaves the same.
+
+ ⛅️ wrangler 3.68.0
+-------------------
+
+🌀 Creating namespace with title "workers-visitors-view_counter"
+✨ Success!
+Add the following to your configuration file in your kv_namespaces array:
+[[kv_namespaces]]
+binding = "view_counter"
+id = "3d04e05e4b864148b2950aad45851473"
+```
+
+- workers-visitors/wrangler.toml
+
+```tsx
+#:schema node_modules/wrangler/config-schema.json
+name = "workers-visitors"
+main = "src/index.ts"
+compatibility_date = "2024-07-29"
+compatibility_flags = ["nodejs_compat"]
+
+kv_namespaces = [
+  { binding = "view_counter", id = "3d04e05e4b864148b2950aad45851473" }
+]
+```
+
+- workers-visitors/src/index.ts
+
+```tsx
+export interface Env {
+  // Example binding to KV. Learn more at https://developers.cloudflare.com/workers/runtime-apis/kv/
+  DB: KVNamespace;
+}
+
+// @ts-ignore
+import home from "./home.html";
+
+export default {
+  async fetch(request, env, ctx): Promise<Response> {
+    const url = new URL(request.url);
+    if (url.pathname === "/") {
+      await env.DB.put("hello", "how are you?");
+      return new Response(home, {
+        headers: {
+          "Content-Type": "text/html;chartset=utf-8",
+        },
+      });
+    }
+    return new Response(null, {
+      status: 404,
+    });
+  },
+} satisfies ExportedHandler<Env>;
+```
+
+### 팁
+
+wrangler kv:namespace create "view_counter"
+
+wrangler kv:namespace create --preview "view_counter"
+
+VSC 'better toml' install
+
+---
+
+로컬에서 사용시
+
+npm run start 사용시 KV-Cloudflare preview 데이터 저장 안됨
+
+wrangler dev --remote 로 시작해야 KV-Cloudflare preview 에 데이터 저장이 됨

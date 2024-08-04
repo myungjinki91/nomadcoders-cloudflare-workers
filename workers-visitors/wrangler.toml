@@ -4,6 +4,10 @@ main = "src/index.ts"
 compatibility_date = "2024-07-29"
 compatibility_flags = ["nodejs_compat"]
 
+kv_namespaces = [
+  { binding = "DB", id = "3d04e05e4b864148b2950aad45851473", preview_id = "a7573ca76396474c811223313b0ad5a6" }
+]
+
 # Automatically place your workloads in an optimal location to minimize latency.
 # If you are running back-end logic in a Worker, running it closer to your back-end infrastructure
 # rather than the end user may result in better performance.

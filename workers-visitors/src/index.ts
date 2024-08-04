@@ -11,8 +11,27 @@
  * Learn more at https://developers.cloudflare.com/workers/
  */
 
+export interface Env {
+	// Example binding to KV. Learn more at https://developers.cloudflare.com/workers/runtime-apis/kv/
+	DB: KVNamespace;
+}
+
+// @ts-ignore
+import home from './home.html';
+
 export default {
 	async fetch(request, env, ctx): Promise<Response> {
-		return new Response('it works!!');
+		const url = new URL(request.url);
+		if (url.pathname === '/') {
+			await env.DB.put('hello', 'HI niko');
+			return new Response(home, {
+				headers: {
+					'Content-Type': 'text/html;chartset=utf-8',
+				},
+			});
+		}
+		return new Response(null, {
+			status: 404,
+		});
 	},
 } satisfies ExportedHandler<Env>;
